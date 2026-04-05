@@ -1,15 +1,17 @@
 ﻿using Auth_Back.Constants;
 using Auth_Back.DTOs.Auth.LoginANDLogout;
 using Auth_Back.DTOs.Auth.Register;
+using Auth_Back.DTOs.Auth.Token;
 using Auth_Back.Mappers;
 using Auth_Back.Models;
+using Auth_Back.Provider;
+using Auth_Back.Rsa;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Text;
-using Auth_Back.Rsa;
-using Auth_Back.Provider;
 namespace Auth_Back.Services
 {
     public class AuthService : IAuthService
@@ -108,6 +110,53 @@ namespace Auth_Back.Services
         }
 
         // Login
+        //public async Task<AuthResponseDto> LoginAsync(LoginRequestDto request)
+        //{
+        //    var user = await _userManager.FindByEmailAsync(request.Email);
+
+        //    if (user == null)
+        //    {
+        //        return new AuthResponseDto
+        //        {
+        //            IsSuccess = false,
+        //            Message = "Userr not found"
+        //        };
+        //    }
+
+        //    var isValidPassword = await _userManager.CheckPasswordAsync(user, request.Password);
+
+        //    if (!isValidPassword)
+        //    {
+        //        return new AuthResponseDto
+        //        {
+        //            IsSuccess = false,
+        //            Message = "Invalid password"
+        //        };
+        //    }
+
+        //    var roles = await _userManager.GetRolesAsync(user);
+
+        //    var rsa = RsaKeyProvider.GetPrivateKey();
+
+        //    var jwtGenerator = new JwtTokenGenerator(rsa);
+
+        //    var token = jwtGenerator.GenerateToken(
+        //        user.Id,
+        //        user.Email,
+        //        roles.ToList()
+        //    );
+
+        //    return new AuthResponseDto
+        //    {
+        //        IsSuccess = true,
+        //        AccessToken = token,
+        //        UserId = user.Id,
+        //        Email = user.Email,
+        //        Roles = roles.ToList(),
+        //        AccessTokenExpiry = DateTime.UtcNow.AddHours(2)
+        //    };
+
+        //}
         public async Task<AuthResponseDto> LoginAsync(LoginRequestDto request)
         {
             var user = await _userManager.FindByEmailAsync(request.Email);
@@ -117,7 +166,7 @@ namespace Auth_Back.Services
                 return new AuthResponseDto
                 {
                     IsSuccess = false,
-                    Message = "Userr not found"
+                    Message = "User not found"
                 };
             }
 
@@ -134,26 +183,91 @@ namespace Auth_Back.Services
 
             var roles = await _userManager.GetRolesAsync(user);
 
+            // 🔐 JWT
             var rsa = RsaKeyProvider.GetPrivateKey();
-
             var jwtGenerator = new JwtTokenGenerator(rsa);
 
-            var token = jwtGenerator.GenerateToken(
+            var accessToken = jwtGenerator.GenerateToken(
                 user.Id,
                 user.Email,
                 roles.ToList()
             );
 
+            // 🔁 Refresh Token
+            var refreshToken = GenerateRefreshToken();
+
+            // 💾 Store Refresh Token in Identity
+            await _userManager.SetAuthenticationTokenAsync(
+                user,
+                "MyApp",
+                "RefreshToken",
+                refreshToken
+            );
+
             return new AuthResponseDto
             {
                 IsSuccess = true,
-                AccessToken = token,
+                Message = "Login successful",
+                AccessToken = accessToken,
+                RefreshToken = refreshToken,
                 UserId = user.Id,
                 Email = user.Email,
                 Roles = roles.ToList(),
-                AccessTokenExpiry = DateTime.UtcNow.AddHours(2)
-            };
+                AccessTokenExpiry = DateTime.UtcNow.AddMinutes(15)
+            }; 
+        }
 
+        private string GenerateRefreshToken()
+        {
+            var randomBytes = new byte[64];
+            using var rng = RandomNumberGenerator.Create();
+            rng.GetBytes(randomBytes);
+
+            return Convert.ToBase64String(randomBytes);
+        }
+        public async Task<RefreshTokenResponseDto> RefreshTokenAsync(RefreshTokenRequestDto request)
+        {
+            var user = await _userManager.FindByEmailAsync(request.Email);
+
+            if (user == null)
+                return null;
+
+            var savedToken = await _userManager.GetAuthenticationTokenAsync(
+                user,
+                "MyApp",
+                "RefreshToken"
+            );
+
+            // 🔐 Vérification
+            if (savedToken != request.RefreshToken)
+                return null;
+
+            var roles = await _userManager.GetRolesAsync(user);
+
+            var rsa = RsaKeyProvider.GetPrivateKey();
+            var jwtGenerator = new JwtTokenGenerator(rsa);
+
+            var newAccessToken = jwtGenerator.GenerateToken(
+                user.Id,
+                user.Email,
+                roles.ToList()
+            );
+
+            // 🔥 rotation refresh token
+            var newRefreshToken = GenerateRefreshToken();
+
+            await _userManager.SetAuthenticationTokenAsync(
+                user,
+                "MyApp",
+                "RefreshToken",
+                newRefreshToken
+            );
+
+            return new RefreshTokenResponseDto
+            {
+                AccessToken = newAccessToken,
+                RefreshToken = newRefreshToken
+            };
         }
     }
 }

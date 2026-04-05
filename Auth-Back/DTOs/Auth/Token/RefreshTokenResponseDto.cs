@@ -2,12 +2,16 @@
 {
     public class RefreshTokenResponseDto
     {
-        public bool IsSuccess { get; set; }
-        public string NewAccessToken { get; set; }
-        public string NewRefreshToken { get; set; }
+        //public bool IsSuccess { get; set; }
+        //public string NewAccessToken { get; set; }
+        //public string NewRefreshToken { get; set; }
 
-        public DateTime AccessTokenExpiry { get; set; }
+        //public DateTime AccessTokenExpiry { get; set; }
 
-        public List<string> Errors { get; set; } = new();
+
+        //public List<string> Errors { get; set; } = new();
+        public string AccessToken { get; set; }
+
+        public string RefreshToken { get; set; }
     }
 } 
