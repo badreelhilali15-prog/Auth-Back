@@ -1,0 +1,6 @@
+services:
+  auth-back:
+    image: ${DOCKER_REGISTRY-}authback
+    build:
+      context: .
+      dockerfile: Auth-Back/Dockerfile
