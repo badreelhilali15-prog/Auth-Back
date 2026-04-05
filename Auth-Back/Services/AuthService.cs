@@ -8,7 +8,8 @@ using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
-
+using Auth_Back.Rsa;
+using Auth_Back.Provider;
 namespace Auth_Back.Services
 {
     public class AuthService : IAuthService
@@ -133,7 +134,25 @@ namespace Auth_Back.Services
 
             var roles = await _userManager.GetRolesAsync(user);
 
-            var token = GenerateJwtToken(user, roles);
+            var rsa = RsaKeyProvider.GetPrivateKey();
+
+            var jwtGenerator = new JwtTokenGenerator(rsa);
+
+            var token = jwtGenerator.GenerateToken(
+                user.Id,
+                user.Email,
+                roles.ToList()
+            );
+
+            return new AuthResponseDto
+            {
+                IsSuccess = true,
+                AccessToken = token,
+                UserId = user.Id,
+                Email = user.Email,
+                Roles = roles.ToList(),
+                AccessTokenExpiry = DateTime.UtcNow.AddHours(2)
+            };
 
         }
     }

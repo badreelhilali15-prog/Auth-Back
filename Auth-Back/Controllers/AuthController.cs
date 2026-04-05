@@ -1,5 +1,7 @@
-﻿using Auth_Back.DTOs.Auth.Register;
+﻿using Auth_Back.DTOs.Auth.LoginANDLogout;
+using Auth_Back.DTOs.Auth.Register;
 using Auth_Back.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
@@ -25,6 +27,23 @@ namespace Auth_Back.Controllers
                 return BadRequest(result);
             }
             return Ok(result);
+        }
+        [HttpPost("login")]
+        public async Task<IActionResult> Login(LoginRequestDto request)
+        {
+            var result = await _authService.LoginAsync(request);
+            if (!result.IsSuccess)
+            {
+                return BadRequest(result);
+            }
+            return Ok(result);
+        }
+
+        [Authorize]
+        [HttpPost("Secret")]
+        public IActionResult Secret()
+        {
+            return Ok("This is authenticated users.");
         }
     }
 }
