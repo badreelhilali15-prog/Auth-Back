@@ -1,20 +1,28 @@
 ﻿using Auth_Back.Constants;
+using Auth_Back.DTOs.Auth.LoginANDLogout;
 using Auth_Back.DTOs.Auth.Register;
 using Auth_Back.Mappers;
 using Auth_Back.Models;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.IdentityModel.Tokens;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
 
 namespace Auth_Back.Services
 {
     public class AuthService : IAuthService
     {
         private readonly UserManager<ApplicationUser> _userManager;
+        private readonly IConfiguration _configuration;
 
-        public AuthService(UserManager<ApplicationUser> userManager)
+        public AuthService(UserManager<ApplicationUser> userManager,
+            IConfiguration configuration)
         {
             _userManager = userManager;
+            _configuration = configuration;
         }
-
+        //  Register
         public async Task<RegisterResponseDto> RegisterAsync(RegisterRequestDto dto)
         {
             // basique validation
@@ -96,6 +104,37 @@ namespace Auth_Back.Services
                 IsSuccess = true,
                 Message = "User registered successfully"
             };
+        }
+
+        // Login
+        public async Task<AuthResponseDto> LoginAsync(LoginRequestDto request)
+        {
+            var user = await _userManager.FindByEmailAsync(request.Email);
+
+            if (user == null)
+            {
+                return new AuthResponseDto
+                {
+                    IsSuccess = false,
+                    Message = "Userr not found"
+                };
+            }
+
+            var isValidPassword = await _userManager.CheckPasswordAsync(user, request.Password);
+
+            if (!isValidPassword)
+            {
+                return new AuthResponseDto
+                {
+                    IsSuccess = false,
+                    Message = "Invalid password"
+                };
+            }
+
+            var roles = await _userManager.GetRolesAsync(user);
+
+            var token = GenerateJwtToken(user, roles);
+
         }
     }
 }
