@@ -12,6 +12,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 namespace Auth_Back.Services
 {
     public class AuthService : IAuthService
@@ -109,6 +110,167 @@ namespace Auth_Back.Services
             };
         }
 
+        
+        public async Task<AuthResponseDto> LoginAsync(LoginRequestDto request)
+        {
+            var user = await _userManager.FindByEmailAsync(request.Email);
+
+            if (user == null)
+            {
+                return new AuthResponseDto
+                {
+                    IsSuccess = false,
+                    Message = "User not found"
+                };
+            }
+
+            var isValidPassword = await _userManager.CheckPasswordAsync(user, request.Password);
+
+            if (!isValidPassword)
+            {
+                return new AuthResponseDto
+                {
+                    IsSuccess = false,
+                    Message = "Invalid password"
+                };
+            }
+
+            var roles = await _userManager.GetRolesAsync(user);
+
+            // 🔐 JWT
+            var rsa = RsaKeyProvider.GetPrivateKey();
+            var jwtGenerator = new JwtTokenGenerator(rsa);
+
+            var accessToken = jwtGenerator.GenerateToken(
+                user.Id,
+                user.Email,
+                roles.ToList()
+            );
+
+            // 🔁 Refresh Token
+            var (refreshToken, expiry) = GenerateRefreshToken();
+            var refreshTokenInfo = new RefreshTokenInfo
+            {
+                Token = refreshToken,
+                ExpiryDate = DateTime.UtcNow.AddDays(7)
+            };
+             var json = JsonSerializer.Serialize(refreshTokenInfo);
+
+            //var storedValue = $"{refreshToken}|{expiry:o}";
+
+            await _userManager.SetAuthenticationTokenAsync(
+                user,
+                "MyApp",
+                "RefreshToken",
+                json
+            );
+
+            return new AuthResponseDto
+            {
+                IsSuccess = true,
+                Message = "Login successful",
+                AccessToken = accessToken,
+                RefreshToken = refreshToken,
+                UserId = user.Id,
+                Email = user.Email,
+                Roles = roles.ToList(),
+                AccessTokenExpiry = DateTime.UtcNow.AddMinutes(15)
+            }; 
+        }
+
+        private (string token, DateTime expiry) GenerateRefreshToken()
+        {
+            var randomBytes = new byte[64];
+            using var rng = RandomNumberGenerator.Create();
+            rng.GetBytes(randomBytes);
+             var token = Convert.ToBase64String(randomBytes);
+             var expiry = DateTime.UtcNow.AddDays(7); // 7 jours de vie4 de refresh token
+            return (token, expiry);
+        }
+        public async Task<RefreshTokenResponseDto> RefreshTokenAsync(RefreshTokenRequestDto request)
+        {
+            var user = await _userManager.FindByEmailAsync(request.Email);
+
+            if (user == null)
+                return null;
+
+            var stored = await _userManager.GetAuthenticationTokenAsync(
+                user,
+                "MyApp",
+                "RefreshToken"
+);
+
+            if (stored == null)
+                return null;
+
+            // 🔥 séparation token + date
+            var parts = stored.Split('|');
+
+            //var savedToken = parts[0];
+            //var expiry = DateTime.Parse(parts[1]);
+
+            //// 🔐 vérifier token
+            //if (savedToken != request.RefreshToken)
+            //    return null;
+
+            //// ⏳ vérifier expiration
+            //if (expiry < DateTime.UtcNow)
+            //    return null;
+
+            var savedTokenJson = await _userManager.GetAuthenticationTokenAsync(
+                user,
+                "MyApp",
+                "RefreshToken"
+);
+
+            var tokenInfo = JsonSerializer.Deserialize<RefreshTokenInfo>(savedTokenJson);
+
+            if (tokenInfo.Token != request.RefreshToken)
+                return null;
+
+            if (tokenInfo.ExpiryDate < DateTime.UtcNow)
+                return null;
+
+            var roles = await _userManager.GetRolesAsync(user);
+
+            var rsa = RsaKeyProvider.GetPrivateKey();
+            var jwtGenerator = new JwtTokenGenerator(rsa);
+
+            var newAccessToken = jwtGenerator.GenerateToken(
+                user.Id,
+                user.Email,
+                roles.ToList()
+            );
+
+            var (newRefreshToken, newExpiry) = GenerateRefreshToken();
+
+            var storedValue = $"{newRefreshToken}|{newExpiry:o}";
+
+            await _userManager.SetAuthenticationTokenAsync(
+                user,
+                "MyApp",
+                "RefreshToken",
+                storedValue
+            );
+            return new RefreshTokenResponseDto
+            {
+                AccessToken = newAccessToken,
+                RefreshToken = newRefreshToken
+            };
+        }
+        public async Task<bool> LogoutAsync(LogoutRequestDto request)
+        {
+            var user = await _userManager.FindByEmailAsync(request.Email);
+
+            if (user == null)
+                return false;
+            await _userManager.RemoveAuthenticationTokenAsync(
+                user,
+                "MyApp",
+                "RefreshToken"
+            );
+            return true;
+        }
         // Login
         //public async Task<AuthResponseDto> LoginAsync(LoginRequestDto request)
         //{
@@ -157,117 +319,5 @@ namespace Auth_Back.Services
         //    };
 
         //}
-        public async Task<AuthResponseDto> LoginAsync(LoginRequestDto request)
-        {
-            var user = await _userManager.FindByEmailAsync(request.Email);
-
-            if (user == null)
-            {
-                return new AuthResponseDto
-                {
-                    IsSuccess = false,
-                    Message = "User not found"
-                };
-            }
-
-            var isValidPassword = await _userManager.CheckPasswordAsync(user, request.Password);
-
-            if (!isValidPassword)
-            {
-                return new AuthResponseDto
-                {
-                    IsSuccess = false,
-                    Message = "Invalid password"
-                };
-            }
-
-            var roles = await _userManager.GetRolesAsync(user);
-
-            // 🔐 JWT
-            var rsa = RsaKeyProvider.GetPrivateKey();
-            var jwtGenerator = new JwtTokenGenerator(rsa);
-
-            var accessToken = jwtGenerator.GenerateToken(
-                user.Id,
-                user.Email,
-                roles.ToList()
-            );
-
-            // 🔁 Refresh Token
-            var refreshToken = GenerateRefreshToken();
-
-            // 💾 Store Refresh Token in Identity
-            await _userManager.SetAuthenticationTokenAsync(
-                user,
-                "MyApp",
-                "RefreshToken",
-                refreshToken
-            );
-
-            return new AuthResponseDto
-            {
-                IsSuccess = true,
-                Message = "Login successful",
-                AccessToken = accessToken,
-                RefreshToken = refreshToken,
-                UserId = user.Id,
-                Email = user.Email,
-                Roles = roles.ToList(),
-                AccessTokenExpiry = DateTime.UtcNow.AddMinutes(15)
-            }; 
-        }
-
-        private string GenerateRefreshToken()
-        {
-            var randomBytes = new byte[64];
-            using var rng = RandomNumberGenerator.Create();
-            rng.GetBytes(randomBytes);
-
-            return Convert.ToBase64String(randomBytes);
-        }
-        public async Task<RefreshTokenResponseDto> RefreshTokenAsync(RefreshTokenRequestDto request)
-        {
-            var user = await _userManager.FindByEmailAsync(request.Email);
-
-            if (user == null)
-                return null;
-
-            var savedToken = await _userManager.GetAuthenticationTokenAsync(
-                user,
-                "MyApp",
-                "RefreshToken"
-            );
-
-            // 🔐 Vérification
-            if (savedToken != request.RefreshToken)
-                return null;
-
-            var roles = await _userManager.GetRolesAsync(user);
-
-            var rsa = RsaKeyProvider.GetPrivateKey();
-            var jwtGenerator = new JwtTokenGenerator(rsa);
-
-            var newAccessToken = jwtGenerator.GenerateToken(
-                user.Id,
-                user.Email,
-                roles.ToList()
-            );
-
-            // 🔥 rotation refresh token
-            var newRefreshToken = GenerateRefreshToken();
-
-            await _userManager.SetAuthenticationTokenAsync(
-                user,
-                "MyApp",
-                "RefreshToken",
-                newRefreshToken
-            );
-
-            return new RefreshTokenResponseDto
-            {
-                AccessToken = newAccessToken,
-                RefreshToken = newRefreshToken
-            };
-        }
     }
 }

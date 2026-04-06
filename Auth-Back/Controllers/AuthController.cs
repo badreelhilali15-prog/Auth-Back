@@ -1,8 +1,10 @@
 ﻿using Auth_Back.DTOs.Auth.LoginANDLogout;
 using Auth_Back.DTOs.Auth.Register;
+using Auth_Back.DTOs.Auth.Token;
 using Auth_Back.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Auth_Back.Controllers
@@ -12,10 +14,11 @@ namespace Auth_Back.Controllers
     public class AuthController : ControllerBase
     {
         private readonly IAuthService _authService;
-
-        public AuthController(IAuthService authService)
+        private readonly UserManager<IdentityUser> _userManager;
+        public AuthController(IAuthService authService )
         {
             _authService = authService;
+       
         }
 
         [HttpPost("register")]
@@ -34,16 +37,36 @@ namespace Auth_Back.Controllers
             var result = await _authService.LoginAsync(request);
             if (!result.IsSuccess)
             {
-                return BadRequest(result);
+                return Unauthorized(result);
             }
             return Ok(result);
         }
-
+        [HttpPost("refresh")]
+        public async Task<IActionResult> Refresh(RefreshTokenRequestDto request)
+        {
+            var result = await _authService.RefreshTokenAsync(request);
+            if (result == null)
+            {
+                return Unauthorized();
+            }
+            return Ok(result);
+        }
         [Authorize]
         [HttpPost("Secret")]
         public IActionResult Secret()
         {
             return Ok("This is authenticated users.");
+        }
+
+        [HttpPost("logout")]
+        public async Task<IActionResult> Logout(LogoutRequestDto request )
+        {
+            var result = await _authService.LogoutAsync(request);
+            if (!result)
+            {
+                return BadRequest("Logout failed.");
+            }
+            return Ok("logout success");  
         }
     }
 }

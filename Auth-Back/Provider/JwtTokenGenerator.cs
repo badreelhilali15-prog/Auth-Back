@@ -37,7 +37,7 @@ namespace Auth_Back.Provider
                 issuer: "MyApp",
                 audience: "MyClient",
                 claims: claims,
-                expires: DateTime.UtcNow.AddHours(2),
+                expires: DateTime.UtcNow.AddMinutes(15),
                 signingCredentials: credentials
             );
 
