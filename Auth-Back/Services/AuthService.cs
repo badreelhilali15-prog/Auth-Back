@@ -406,7 +406,7 @@ namespace Auth_Back.Services
 
             await client.ConnectAsync("smtp.gmail.com", 587, MailKit.Security.SecureSocketOptions.StartTls);
 
-            await client.AuthenticateAsync("ton_email@gmail.com", "woblaetffvdmmwpw");
+            await client.AuthenticateAsync("badreelhilali15@gmail.com", "woblaetffvdmmwpw");
 
             Console.WriteLine("Connected OK");
 
