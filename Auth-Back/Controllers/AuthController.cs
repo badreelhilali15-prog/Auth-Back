@@ -1,6 +1,8 @@
-﻿using Auth_Back.DTOs.Auth.LoginANDLogout;
+﻿using Auth_Back.DTOs;
+using Auth_Back.DTOs.Auth.LoginANDLogout;
 using Auth_Back.DTOs.Auth.Register;
 using Auth_Back.DTOs.Auth.Token;
+using Auth_Back.DTOs.Password;
 using Auth_Back.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -15,10 +17,10 @@ namespace Auth_Back.Controllers
     {
         private readonly IAuthService _authService;
         private readonly UserManager<IdentityUser> _userManager;
-        public AuthController(IAuthService authService )
+        public AuthController(IAuthService authService)
         {
             _authService = authService;
-       
+
         }
 
         [HttpPost("register")]
@@ -37,9 +39,9 @@ namespace Auth_Back.Controllers
             var result = await _authService.LoginAsync(request);
             if (!result.IsSuccess)
             {
-                return Unauthorized(result);
+                return Unauthorized(result);// 4001
             }
-            return Ok(result);
+            return Ok(result);//200
         }
         [HttpPost("refresh")]
         public async Task<IActionResult> Refresh(RefreshTokenRequestDto request)
@@ -59,14 +61,55 @@ namespace Auth_Back.Controllers
         }
 
         [HttpPost("logout")]
-        public async Task<IActionResult> Logout(LogoutRequestDto request )
+        public async Task<IActionResult> Logout(LogoutRequestDto request)
         {
             var result = await _authService.LogoutAsync(request);
             if (!result)
             {
-                return BadRequest("Logout failed.");
+                return NotFound("User not Found");
             }
-            return Ok("logout success");  
+            return Ok("logout success");
+        }
+
+        [HttpPost("change-password")]
+        public async Task<IActionResult> ChangePassword(ChangePasswordDto dto)
+        {
+            var result = await _authService.ChangePasswordAsync(dto);
+            if (!result)
+            {
+                return BadRequest("Change password failed.");
+            }
+            return Ok("Password changed successfully.");
+        }
+
+        [HttpPost("forgot-password")]
+        public async Task<IActionResult> ForgotPassword(ForgotPasswordRequestDto dto)
+        {
+            var result = await _authService.ForgotPasswordAsync(dto);
+            return Ok(new
+            {
+                //if the email exists, we will send the reset password link
+                message = "Check y email"
+            });
+        }
+
+        [HttpPost("reset-password")]
+        public async Task<IActionResult> ResetPassword(ResetPasswordDto dto)
+        {
+            var result = await _authService.ResetPasswordAsync(dto);
+            if (!result)
+            {
+                return BadRequest("Reset password failed.");
+            }
+            return Ok("Password reset successfully.");
+
+            //var result = await _authService.ChangePasswordAsync(dto);
+            //if (!result)
+            //{
+            //    return BadRequest("Change password failed.");
+            //}
+            //return Ok("Password changed successfully.");
+
         }
     }
 }

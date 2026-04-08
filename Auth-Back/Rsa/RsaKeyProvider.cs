@@ -4,22 +4,30 @@ namespace Auth_Back.Rsa
 {
     public static class RsaKeyProvider
     {
-        public static readonly RSA _rsa;
+        public static readonly RSA _privateRsa;
 
         static RsaKeyProvider()
         {
-            _rsa = RSAKey.GenrateKeyRSA();
+            _privateRsa = LoadPrivateKey();
         }
 
+        public static RSA LoadPrivateKey()
+        {
+            var pem= File.ReadAllText("Keys/private_key.pem");
+            var rsa = RSA.Create();
+            rsa.ImportFromPem(pem.ToCharArray());
+            return rsa;
+        }
         public static RSA GetPrivateKey()
         {
-            return _rsa;
+            return _privateRsa;
         }
         public static RSA GetPublicKey()
         {
-            var publicKey = RSA.Create();
-            publicKey.ImportRSAPublicKey(_rsa.ExportRSAPublicKey(), out _);
-            return publicKey;
+            var pem =File .ReadAllText("Keys/public_key.pem");
+            var rsa = RSA.Create();
+            rsa.ImportFromPem(pem.ToCharArray());
+            return rsa;
         }
     }
 }

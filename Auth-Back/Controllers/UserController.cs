@@ -1,4 +1,7 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Auth_Back.Constants;
+using Auth_Back.Services;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 
 // For more information on enabling Web API for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
 
@@ -6,38 +9,25 @@ namespace Auth_Back.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize(Roles=Roles.Admin)]
     public class UserController : ControllerBase
     {
-        // GET: api/<UserController>
-        [HttpGet]
-        public IEnumerable<string> Get()
-        {
-            return new string[] { "value1", "value2" };
-        }
+        private readonly IUserService _userService;
 
-        // GET api/<UserController>/5
+        public UserController(IUserService userService)
+        {
+            _userService = userService;
+        }
         [HttpGet("{id}")]
-        public string Get(int id)
-        {
-            return "value";
-        }
 
-        // POST api/<UserController>
-        [HttpPost]
-        public void Post([FromBody] string value)
+        public async Task<IActionResult> GetUserById(string id)
         {
-        }
-
-        // PUT api/<UserController>/5
-        [HttpPut("{id}")]
-        public void Put(int id, [FromBody] string value)
-        {
-        }
-
-        // DELETE api/<UserController>/5
-        [HttpDelete("{id}")]
-        public void Delete(int id)
-        {
+            var user = await _userService.GetUserDetailById(id);
+            if (user == null)
+            {
+                return NotFound("User Not Found");
+            }
+            return Ok(user);
         }
     }
 }

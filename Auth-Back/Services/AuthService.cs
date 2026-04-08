@@ -1,18 +1,24 @@
 ﻿using Auth_Back.Constants;
+using Auth_Back.DTOs;
 using Auth_Back.DTOs.Auth.LoginANDLogout;
 using Auth_Back.DTOs.Auth.Register;
 using Auth_Back.DTOs.Auth.Token;
+using Auth_Back.DTOs.Password;
 using Auth_Back.Mappers;
 using Auth_Back.Models;
 using Auth_Back.Provider;
 using Auth_Back.Rsa;
+using MailKit.Net.Smtp;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.IdentityModel.Tokens;
+using MimeKit;
 using System.IdentityModel.Tokens.Jwt;
+using System.Net;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+
 namespace Auth_Back.Services
 {
     public class AuthService : IAuthService
@@ -110,7 +116,7 @@ namespace Auth_Back.Services
             };
         }
 
-        
+
         public async Task<AuthResponseDto> LoginAsync(LoginRequestDto request)
         {
             var user = await _userManager.FindByEmailAsync(request.Email);
@@ -154,7 +160,7 @@ namespace Auth_Back.Services
                 Token = refreshToken,
                 ExpiryDate = DateTime.UtcNow.AddDays(7)
             };
-             var json = JsonSerializer.Serialize(refreshTokenInfo);
+            var json = JsonSerializer.Serialize(refreshTokenInfo);
 
             //var storedValue = $"{refreshToken}|{expiry:o}";
 
@@ -175,7 +181,7 @@ namespace Auth_Back.Services
                 Email = user.Email,
                 Roles = roles.ToList(),
                 AccessTokenExpiry = DateTime.UtcNow.AddMinutes(15)
-            }; 
+            };
         }
 
         private (string token, DateTime expiry) GenerateRefreshToken()
@@ -183,8 +189,8 @@ namespace Auth_Back.Services
             var randomBytes = new byte[64];
             using var rng = RandomNumberGenerator.Create();
             rng.GetBytes(randomBytes);
-             var token = Convert.ToBase64String(randomBytes);
-             var expiry = DateTime.UtcNow.AddDays(7); // 7 jours de vie4 de refresh token
+            var token = Convert.ToBase64String(randomBytes);
+            var expiry = DateTime.UtcNow.AddDays(7); // 7 jours de vie4 de refresh token
             return (token, expiry);
         }
         public async Task<RefreshTokenResponseDto> RefreshTokenAsync(RefreshTokenRequestDto request)
@@ -261,7 +267,6 @@ namespace Auth_Back.Services
         public async Task<bool> LogoutAsync(LogoutRequestDto request)
         {
             var user = await _userManager.FindByEmailAsync(request.Email);
-
             if (user == null)
                 return false;
             await _userManager.RemoveAuthenticationTokenAsync(
@@ -271,53 +276,186 @@ namespace Auth_Back.Services
             );
             return true;
         }
-        // Login
-        //public async Task<AuthResponseDto> LoginAsync(LoginRequestDto request)
-        //{
-        //    var user = await _userManager.FindByEmailAsync(request.Email);
 
-        //    if (user == null)
-        //    {
-        //        return new AuthResponseDto
-        //        {
-        //            IsSuccess = false,
-        //            Message = "Userr not found"
-        //        };
-        //    }
+        // cahnge password 
+        public async Task<bool> ChangePasswordAsync(ChangePasswordDto dto)
+        {
+            var user = await _userManager.FindByEmailAsync(dto.Email);
+            if (user == null)
+                return false;
+            var result = await _userManager.ChangePasswordAsync(
+                user,
+                dto.CurrentPassword,
+                dto.NewPassword);
+            return result.Succeeded;
+        }
 
-        //    var isValidPassword = await _userManager.CheckPasswordAsync(user, request.Password);
+        //Forget password 
+        public async Task<ForgotPasswordResponseDto> ForgotPasswordAsync(ForgotPasswordRequestDto dto)
+        {
+            var user = await _userManager.FindByEmailAsync(dto.Email);
+            if (user == null)
+                return new ForgotPasswordResponseDto
+                {//if the email existe link in y mail
+                    IsSuccess = true,
+                    Message = "check y email"
+                };
+            var token = await _userManager.GeneratePasswordResetTokenAsync(user);
 
-        //    if (!isValidPassword)
-        //    {
-        //        return new AuthResponseDto
-        //        {
-        //            IsSuccess = false,
-        //            Message = "Invalid password"
-        //        };
-        //    }
+            var resetLink = $"https://localhost:3000/reset-password?email={dto.Email}&token={Uri.EscapeDataString(token)}";
 
-        //    var roles = await _userManager.GetRolesAsync(user);
+            var body = $@"
+                        <h2>Password Reset</h2>
+                        <p>Click the link below to reset your password:</p>
+                        <a href='{resetLink}'>Reset Password</a>
+                    ";
 
-        //    var rsa = RsaKeyProvider.GetPrivateKey();
+            await SendEmailAsync(dto.Email);
 
-        //    var jwtGenerator = new JwtTokenGenerator(rsa);
+            return new ForgotPasswordResponseDto
+            {
+                IsSuccess = true,
+                Message = "Password reset token generated and sent to email(Check y email)"
+            };
+            //// Ici en envo l'email simualtion 
+            //Console.WriteLine($"Reset token :{token}");
+            //return new ForgotPasswordResponseDto
+            //{
+            //    IsSuccess = true,
+            //    Message = "Password reset token generated and sent to email(Check y email)"
+            //};
 
-        //    var token = jwtGenerator.GenerateToken(
-        //        user.Id,
-        //        user.Email,
-        //        roles.ToList()
-        //    );
+        }
+        //Reset password
+        public async Task<bool> ResetPasswordAsync(ResetPasswordDto dto)
+        {
+            var user = await _userManager.FindByEmailAsync(dto.Email);
+            if (user == null)
+                return false;
+            {
 
-        //    return new AuthResponseDto
-        //    {
-        //        IsSuccess = true,
-        //        AccessToken = token,
-        //        UserId = user.Id,
-        //        Email = user.Email,
-        //        Roles = roles.ToList(),
-        //        AccessTokenExpiry = DateTime.UtcNow.AddHours(2)
-        //    };
+                var result = await _userManager.ResetPasswordAsync(
+                    user,
+                    dto.Token,
+                    dto.NewPassword);
 
-        //}
+                return result.Succeeded;
+            }
+
+            // Login
+            //public async Task<AuthResponseDto> LoginAsync(LoginRequestDto request)
+            //{
+            //    var user = await _userManager.FindByEmailAsync(request.Email);
+
+            //    if (user == null)
+            //    {
+            //        return new AuthResponseDto
+            //        {
+            //            IsSuccess = false,
+            //            Message = "Userr not found"
+            //        };
+            //    }
+
+            //    var isValidPassword = await _userManager.CheckPasswordAsync(user, request.Password);
+
+            //    if (!isValidPassword)
+            //    {
+            //        return new AuthResponseDto
+            //        {
+            //            IsSuccess = false,
+            //            Message = "Invalid password"
+            //        };
+            //    }
+
+            //    var roles = await _userManager.GetRolesAsync(user);
+
+            //    var rsa = RsaKeyProvider.GetPrivateKey();
+
+            //    var jwtGenerator = new JwtTokenGenerator(rsa);
+
+            //    var token = jwtGenerator.GenerateToken(
+            //        user.Id,
+            //        user.Email,
+            //        roles.ToList()
+            //    );
+
+            //    return new AuthResponseDto
+            //    {
+            //        IsSuccess = true,
+            //        AccessToken = token,
+            //        UserId = user.Id,
+            //        Email = user.Email,
+            //        Roles = roles.ToList(),
+            //        AccessTokenExpiry = DateTime.UtcNow.AddHours(2)
+            //    };
+
+            //}
+        }
+        //Send link in gmail
+        public async Task SendEmailAsync(string to)
+        {
+            var message = new MimeMessage();
+            message.From.Add(new MailboxAddress("MyApp", "ton_email@gmail.com"));
+            message.To.Add(new MailboxAddress("ToTest", to));
+            message.Subject = "Test Email";
+            message.Body = new TextPart("plain") { Text = "Hello World !" };
+
+            using var client = new MailKit.Net.Smtp.SmtpClient();
+
+            client.ServerCertificateValidationCallback = (s, c, h, e) => true;
+
+            await client.ConnectAsync("smtp.gmail.com", 587, MailKit.Security.SecureSocketOptions.StartTls);
+
+            await client.AuthenticateAsync("ton_email@gmail.com", "woblaetffvdmmwpw");
+
+            Console.WriteLine("Connected OK");
+
+            //var email = new MimeMessage();
+            //email.From.Add(MailboxAddress.Parse("your_email@gmail.com"));
+            //email.To.Add(MailboxAddress.Parse(to));
+            //email.Subject = "Test";
+            //email.Body = new TextPart("plain")
+            //{
+            //    Text = "Hello from MailKit"
+            //};
+
+            //using var smtp = new MailKit.Net.Smtp.SmtpClient();
+
+            //await smtp.ConnectAsync("smtp.gmail.com", 587, MailKit.Security.SecureSocketOptions.StartTls);
+            //await smtp.AuthenticateAsync("your_email@gmail.com", "your_app_password");
+            //await smtp.SendAsync(email);
+            //await smtp.DisconnectAsync(true);
+            //////////////////////////////////////////
+            //public async Task SendEmailAsync(string to, string subject, string body)
+            //{
+            //    var smtpClient = new SmtpClient("smtp.gmail.com")
+            //    {
+            //        Port = 587,
+            //        Credentials = new NetworkCredential("your_email@gmail.com", "your_app_password"),
+            //        EnableSsl = true,
+            //        DeliveryMethod = SmtpDeliveryMethod.Network,
+            //        UseDefaultCredentials = false
+            //    };
+            //    //////////////////////////////////////////
+            //    //using var stmpClient = new SmtpClient("smtp.gmail.com")
+            //    //{
+            //    //    Port = 587,
+            //    //    Credentials = new NetworkCredential("your_email@gmail.com", "app_password"),
+            //    //    EnableSsl = true,
+            //    //};
+            //    /////////////////////////////////////////////
+            //    using var mail = new MailMessage
+            //    {
+            //        From = new MailAddress("YOUR_EMAIL@gmail.com"),
+            //        Subject = subject,
+            //        Body = body,
+            //        IsBodyHtml = true,
+            //    };
+
+            //    mail.To.Add(to);
+            //    await smtpClient.SendMailAsync(mail);
+
+            //}
+        }
     }
 }
