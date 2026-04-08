@@ -18,6 +18,14 @@ namespace Auth_Back.Controllers
         {
             _userService = userService;
         }
+
+        [HttpGet("all-user")]
+        public async Task<IActionResult> GetAllUsers()
+        {
+            var result = await _userService.GetAllUsers();
+            return Ok(result);
+        }
+
         [HttpGet("{id}")]
 
         public async Task<IActionResult> GetUserById(string id)

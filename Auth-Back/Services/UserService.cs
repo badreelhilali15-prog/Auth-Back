@@ -2,6 +2,7 @@
 using Auth_Back.Mappers;
 using Auth_Back.Models;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 
 namespace Auth_Back.Services
 {
@@ -29,6 +30,20 @@ namespace Auth_Back.Services
 
             return UserMapper.MapToUserDetailsDto(user, roles);
 
+        }
+
+        public async Task<List<UserListDto>> GetAllUsers()
+        {
+            var users = await _userManager.Users.ToListAsync();
+            var result = new List<UserListDto>();
+
+            foreach (var user in users)
+            {
+                var roles = await _userManager.GetRolesAsync(user);
+                result.Add(UserMapper.MapToUserListDto(user, roles));
+            }
+
+            return result;
         }
     }
 }
