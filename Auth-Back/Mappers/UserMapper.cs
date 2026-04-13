@@ -41,5 +41,34 @@ namespace Auth_Back.Mappers
                 
             };
         }
+
+        public static UserDto MapToUserDto(ApplicationUser user, IList<string> roles)
+        {
+            bool isActive = user.LockoutEnd == null || user.LockoutEnd <= DateTimeOffset.UtcNow;
+
+            return new UserDto
+            {
+                Id = user.Id,
+                FullName = $"{user.FirstName} {user.LastName}".Trim(),
+                Email = user.Email ?? string.Empty,
+                Roles = roles,
+                IsActive = isActive,
+                TwoFactorEnabled = user.TwoFactorEnabled
+            };
+        }
+        public static UserProfileDto MapToUserProfileDto(ApplicationUser user, IList<string> roles)
+        {
+            return new UserProfileDto
+            {
+                Id = user.Id,
+                UserName = user.UserName ?? string.Empty,
+                FullName = $"{user.FirstName} {user.LastName}".Trim(),
+                Email = user.Email ?? string.Empty,
+                PhoneNumber = user.PhoneNumber,
+                EmailConfirmed = user.EmailConfirmed,
+                TwoFactorEnabled = user.TwoFactorEnabled,
+                Roles = roles
+            };
+        }
     }
 }
