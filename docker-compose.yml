@@ -1,6 +1,38 @@
 services:
-  auth-back:
-    image: ${DOCKER_REGISTRY-}authback
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: sqlserver-auth
+    environment:
+      ACCEPT_EULA: "Y"
+      SA_PASSWORD: "YourStrong@Passw0rd"
+      MSSQL_PID: "Express"
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+    networks:
+      - auth-network
+
+  authback:
     build:
-      context: .
-      dockerfile: Auth-Back/Dockerfile
+      context: ./Auth-Back
+      dockerfile: Dockerfile
+    image: authback
+    container_name: authback
+    depends_on:
+      - sqlserver
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: "http://+:8080"
+      ConnectionStrings__DefaultConnection: "Server=sqlserver;Database=Auth-UserDB;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;Encrypt=False;"
+    ports:
+      - "7173:8080"
+    networks:
+      - auth-network
+
+volumes:
+  sqlserver_data:
+
+networks:
+  auth-network:
+    driver: bridge
